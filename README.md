@@ -19,6 +19,20 @@ that item, and the wrapper-lite response envelope is passed through unchanged.
 
 ## Features
 
+Local account selection and the optional Windows portable controller are available
+in [windows/README.md](windows/README.md). Account selection retains other logins
+while restricting resource requests and `/status` regions to the chosen account.
+
+`POST /select-account` accepts JSON `{"username":"you@example.com"}` for an already
+logged-in account. `GET /select-account` returns `selected` and `region` without
+returning the username or instance identifier. The choice is saved under `data/`.
+With no saved choice, the original aggregated routing remains available. Once a
+choice is saved, an unavailable selected account fails closed instead of using
+another account. `/status` adds `accountSelected` and `savedAccountCount` (the
+registered instance count); `clientCount` reflects the accounts eligible under
+the current selection. These APIs inherit the manager's existing local/trusted
+network deployment model.
+
 - **Multi-account management** — every account = one instance; requests are
   routed to the instance whose storefront region can serve the requested
   `adamId` (region availability is probed against the Apple catalog).

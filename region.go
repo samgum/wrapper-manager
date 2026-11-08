@@ -131,7 +131,7 @@ func checkAvailableOnRegion(adamId string, region string, mv bool) (bool, error)
 // eligible to serve requests: instances whose FairPlay circuit is open (after
 // repeated key-processing failures) are skipped until the cooldown elapses.
 func selectableInstances() []*WrapperInstance {
-	all := SnapshotInstances()
+	all := routingInstances()
 	out := make([]*WrapperInstance, 0, len(all))
 	for _, inst := range all {
 		if circuitOpen(inst.Id) {

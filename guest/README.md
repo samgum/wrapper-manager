@@ -9,7 +9,7 @@ runs on Windows / macOS / any Linux host (see the parent README).
 guest/
 ├── build.sh     # builds wrapper-manager-initramfs.cpio.gz (+ optional data.img)
 ├── init         # guest init script (busybox sh)
-└── modules/     # kernel modules reused from the upstream wrapper initramfs
+└── modules/     # historical modules; builds use the matched upstream artifact
     ├── e1000.ko
     └── qemu_fw_cfg.ko
 ```
@@ -22,7 +22,7 @@ certificates and the kernel modules.
 ## Build
 
 ```shell
-# requires: go, cpio, gzip, e2fsprogs, glibc + ca-certificates (any Debian/Ubuntu)
+# requires: go, cpio, gzip, curl, unzip, e2fsprogs, glibc + ca-certificates
 ./guest/build.sh out                  # initramfs only
 CREATE_DATA_IMG=1 ./guest/build.sh out   # also create a fresh 512MB data.img
 ```
@@ -39,8 +39,17 @@ curl -sL -o qemu-assets.zip \
 unzip -o qemu-assets.zip vmlinuz-lite-qemu -d out/
 ```
 
-Copy it next to the initramfs (the launcher's `--assets-dir`, default
-`<exe>/guest`).
+`build.sh` downloads this artifact and extracts `e1000.ko` and
+`qemu_fw_cfg.ko` from its `lite-initramfs.cpio.gz`. It writes that same
+artifact's kernel beside the manager initramfs. Mixing a new kernel with
+the old tracked modules can leave the guest without network access.
+
+For an offline build, extract both `vmlinuz-lite-qemu` and
+`lite-initramfs.cpio.gz` from one artifact, then run:
+
+```shell
+WRAPPER_QEMU_ASSETS_DIR=/path/to/extracted-assets ./guest/build.sh out
+```
 
 ## What the guest does on boot (init)
 

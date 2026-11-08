@@ -45,3 +45,16 @@ go.work.sum
 
 # guest image build output (guest/build.sh <dir>)
 /dist-guest/
+
+# Optional Windows portable controller state (contains private account data).
+/windows/accounts/
+/windows/data/
+/windows/logs/
+/windows/guest/
+/windows/recovery/
+/windows/process.json*
+/windows/active-profile.json*
+/windows/.control.lock
+/windows/.account-entry.lock
+*.credential.xml
+/dist-launcher/

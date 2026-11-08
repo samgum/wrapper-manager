@@ -275,7 +275,9 @@ func buildQemuArgs(qemuBin, kernel, initrd, dataImg string) []string {
 // detected for a TCG fallback.
 func runQemu(args []string) error {
 	cmd := exec.Command(args[0], args[1:]...)
-	cmd.Stdin = os.Stdin
+	// The guest is managed over HTTP. Inheriting a Windows console input
+	// handle makes detached startup depend on the launching terminal.
+	cmd.Stdin = nil
 	cmd.Stdout = os.Stdout
 
 	stderr, err := cmd.StderrPipe()
@@ -357,7 +359,32 @@ Environment fallbacks: QEMU_BIN, HOST_PORT, GUEST_PORT, MEMORY, SMP
 `)
 }
 
+func backgroundLogs() (func(), error) {
+	prefix := os.Getenv("WRAPPER_MANAGER_LOG_PREFIX")
+	if prefix == "" {
+		return func() {}, nil
+	}
+	stdout, err := os.OpenFile(prefix+".stdout.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
+	if err != nil {
+		return nil, err
+	}
+	stderr, err := os.OpenFile(prefix+".stderr.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
+	if err != nil {
+		stdout.Close()
+		return nil, err
+	}
+	oldOut, oldErr := os.Stdout, os.Stderr
+	os.Stdout, os.Stderr = stdout, stderr
+	return func() { os.Stdout, os.Stderr = oldOut, oldErr; stdout.Close(); stderr.Close() }, nil
+}
+
 func main() {
+	closeLogs, logErr := backgroundLogs()
+	if logErr != nil {
+		fmt.Fprintln(os.Stderr, "cannot open background logs")
+		os.Exit(1)
+	}
+	defer closeLogs()
 	gHost = getenv("LITE_QEMU_HOST", gHost)
 	gHostPort = getenv("HOST_PORT", gHostPort)
 	gGuestPort = getenv("GUEST_PORT", gGuestPort)

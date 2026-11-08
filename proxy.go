@@ -262,7 +262,7 @@ func handleLiteEndpoint(w http.ResponseWriter, r *http.Request) {
 // shape keeps the field names of the previous manager's StatusData so older
 // tooling that parses them keeps working.
 func handleStatus(w http.ResponseWriter, r *http.Request) {
-	instances := SnapshotInstances()
+	instances := routingInstances()
 	regionSeen := make(map[string]bool)
 	regions := make([]string, 0)
 	for _, inst := range instances {
@@ -275,10 +275,12 @@ func handleStatus(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	WriteLiteSuccess(w, map[string]any{
-		"status":      len(instances) != 0,
-		"regions":     regions,
-		"clientCount": len(instances),
-		"ready":       isReady(),
+		"status":            len(instances) != 0,
+		"regions":           regions,
+		"clientCount":       len(instances),
+		"ready":             isReady(),
+		"accountSelected":   activeAccountID() != "",
+		"savedAccountCount": len(SnapshotInstances()),
 		// Instances temporarily excluded after repeated FairPlay failures.
 		"degraded": degradedCount(),
 	})

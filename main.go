@@ -100,6 +100,9 @@ func main() {
 		setReady(true)
 	}
 
+	if err := loadActiveAccount(); err != nil {
+		log.Fatalf("cannot restore active account: %v", err)
+	}
 	mux := http.NewServeMux()
 
 	// Resource endpoints (wrapper-lite compatible, aggregated over accounts).
@@ -110,6 +113,7 @@ func main() {
 	// Management endpoints.
 	mux.HandleFunc("/login", handleLogin)
 	mux.HandleFunc("/logout", handleLogout)
+	mux.HandleFunc("/select-account", handleSelectAccount)
 
 	// OpenTelemetry: build providers (OTLP env vars), bridge logrus logs and
 	// wrap the HTTP handler for automatic per-request traces.

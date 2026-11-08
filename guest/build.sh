@@ -7,13 +7,13 @@
 #   - glibc runtime (any Debian/Ubuntu host has it at the standard paths)
 #   - CA certificates (/etc/ssl/certs/ca-certificates.crt)
 #   - busybox-static (auto-downloaded via apt if missing)
-#   - cpio, gzip, e2fsprogs (mke2fs)
+#   - cpio, gzip, unzip, curl, e2fsprogs (mke2fs)
 #
 # The kernel (vmlinuz-lite-qemu) is NOT built here - it is reused from the
 # upstream wrapper qemu-assets artifact (see guest/README.md).
 #
-# Kernel modules (e1000.ko / qemu_fw_cfg.ko) live in guest/modules/ and are
-# copied verbatim from the upstream wrapper initramfs.
+# The kernel and modules must come from the same upstream qemu-assets build.
+# Set WRAPPER_QEMU_ASSETS_DIR to a pre-extracted artifact for offline builds.
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -70,9 +70,32 @@ if [ ! -f "$OVERLAY/etc/ssl/certs/ca-certificates.crt" ]; then
     fi
 fi
 
-# 5. Kernel modules.
-echo "[build] staging kernel modules..."
-cp "$GUEST_DIR"/modules/*.ko "$OVERLAY/" 2>/dev/null || true
+# 5. Use one artifact for both the kernel and its modules. Tracked modules
+# from an older kernel silently fail to load, leaving the guest without eth0.
+UPSTREAM_ASSETS="${WRAPPER_QEMU_ASSETS_DIR:-}"
+if [ -z "$UPSTREAM_ASSETS" ]; then
+    UPSTREAM_ASSETS="$OUT_DIR/upstream-qemu-assets"
+    mkdir -p "$UPSTREAM_ASSETS"
+    echo "[build] fetching matched upstream QEMU assets..."
+    curl --fail --location --retry 3 --output "$UPSTREAM_ASSETS/qemu-assets.zip" \
+        "https://nightly.link/WorldObservationLog/wrapper/workflows/build-lite/lite/qemu-assets.zip"
+    unzip -o -q "$UPSTREAM_ASSETS/qemu-assets.zip" \
+        vmlinuz-lite-qemu lite-initramfs.cpio.gz -d "$UPSTREAM_ASSETS"
+fi
+UPSTREAM_ASSETS="$(cd "$UPSTREAM_ASSETS" && pwd)"
+for asset in vmlinuz-lite-qemu lite-initramfs.cpio.gz; do
+    [ -f "$UPSTREAM_ASSETS/$asset" ] || { echo "missing upstream asset: $asset"; exit 1; }
+done
+echo "[build] staging matched kernel modules..."
+(
+    cd "$OVERLAY"
+    gzip -dc "$UPSTREAM_ASSETS/lite-initramfs.cpio.gz" | \
+        cpio -idm --quiet --no-absolute-filenames 'e1000.ko' 'qemu_fw_cfg.ko' './e1000.ko' './qemu_fw_cfg.ko'
+)
+for module in e1000.ko qemu_fw_cfg.ko; do
+    [ -s "$OVERLAY/$module" ] || { echo "missing upstream module: $module"; exit 1; }
+done
+cp "$UPSTREAM_ASSETS/vmlinuz-lite-qemu" "$OUT_DIR/vmlinuz-lite-qemu"
 
 # 6. Init script at the initramfs root (required by the kernel).
 cp "$GUEST_DIR/init" "$OVERLAY/init"
@@ -96,5 +119,4 @@ if [ "${CREATE_DATA_IMG:-0}" = "1" ]; then
     echo "[build] data.img created: $DATA_IMG"
 fi
 
-echo "[build] done. Copy vmlinuz-lite-qemu next to the initramfs:"
-echo "  cp <wrapper qemu-assets>/vmlinuz-lite-qemu $OUT_DIR/"
+echo "[build] done. Matched kernel and manager initramfs are in $OUT_DIR"
